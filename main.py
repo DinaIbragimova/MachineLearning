@@ -1,88 +1,70 @@
-import pygame
 import numpy as np
-from sklearn import svm
-import pandas as pd
-import matplotlib.pyplot as plt
-from pygame import QUIT
-
-PINK = (255, 186, 211)
-
-GREEN = (23, 151, 39)
-YELLOW = (236, 200, 78)
-RED = (218, 70, 47)
-
-screen = pygame.display.set_mode((500, 500))
+import random
 
 
-def draw_circle(screen, x, y, color=PINK):
-    pygame.draw.circle(screen, color, (x, y), 5)
+def fitness_func(coefficients, population, result):
+    fitness = np.sum(population * coefficients, axis=1)
+    return abs(result - fitness)
 
 
-if __name__ == '__main__':
-    flags = []
-    neighbours = []
-    model = svm.SVC(kernel='linear')
+def select_parents(population, fitness, num_parents):
+    parents = []
+    for parent_num in range(num_parents):
+        min_firness = np.min(fitness)
+        min_fitness_idx = np.where(fitness == min_firness)[0][0]
+        parents.append(population[min_fitness_idx])
+        fitness[min_fitness_idx] = 99999999999
 
-    is_running = True
-    is_start_svm = False
-    x_data = []
-    y_data = []
-    target = []
-    while is_running:
-        for event in pygame.event.get():
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if not is_start_svm:
-                    (x, y) = pygame.mouse.get_pos()
-                    x_data.append(x)
-                    y_data.append(y)
-                    if event.button == 1:
-                        draw_circle(screen, x, y, RED)
-                        target.append(0)
-                    elif event.button == 3:
-                        draw_circle(screen, x, y, GREEN)
-                        target.append(1)
-                    pygame.display.flip()
-                if is_start_svm:
-                    new_data = []
-                    (x, y) = pygame.mouse.get_pos()
-                    new_point = new_data.append([x, y])
-                    predictions_poly = model.predict(new_data)
-                    if predictions_poly[0] == 0:
-                        draw_circle(screen, x, y, RED)
-                    else:
-                        draw_circle(screen, x, y, GREEN)
-                pygame.display.flip()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    is_start_svm = True
-                    df_x = pd.DataFrame(data=x_data)
-                    df_y = pd.DataFrame(data=y_data)
-                    df_target = pd.DataFrame(data=target)
-                    data_frame = pd.concat([df_x, df_y], ignore_index=True, axis=1)
-                    data_frame = pd.concat([data_frame, df_target], ignore_index=True, axis=1)
+    return np.array(parents)
 
-                    data_frame.columns = ['x', 'y', 'target']
 
-                    features = data_frame[['x', 'y']]
-                    label = data_frame['target']
-                    features_values = features.values
-                    target_value = label.values
-                    length = len(features_values)
+def crossover(parents, children_count, size):
+    childrens = np.empty((children_count, size))
+    center = np.floor(size / 2).astype(int)
 
-                    print(features_values)
+    for k in range(children_count):
+        parent1_idx = k % parents.shape[0]
+        parent2_idx = (k + 1) % parents.shape[0]
+        childrens[k, 0:center] = parents[parent1_idx, 0:center]
+        childrens[k, center:] = parents[parent2_idx, center:]
+    return childrens
 
-                    model.fit(features_values, target_value)
 
-                    fig, ax = plt.subplots(figsize=(12, 7))
-                    xx = np.linspace(-1, max(features['x']) + 1, length)
-                    yy = np.linspace(0, max(features['y']) + 1, length)
-                    YY, XX = np.meshgrid(yy, xx)
-                    xy = np.vstack([XX.ravel(), YY.ravel()]).T
-                    colors = np.where(target_value == 1, '#00FF00', '#FF0000')
-                    ax.scatter(features['x'], features['y'], c=colors)
-                    Z = model.decision_function(xy).reshape(XX.shape)
-                    print(Z)
-                    ax.contour(XX, YY, Z, colors='k', levels=[0], alpha=0.5, linestyles=['-'])
-                    plt.show()
-            if event.type == QUIT:
-                pygame.quit()
+def mutation(childrens, size):
+    for idx in range(childrens.shape[0]):
+        random_value = random.randint(0, 10)
+        random_index = random.randint(0, size - 1)
+        childrens[idx, random_index] = childrens[idx, random_index] + random_value
+
+    return childrens
+
+
+coefficients = [7, 8, 1, 5, 2]
+result = 125
+items_count = 8
+parents_size = 4
+
+pop_size = (items_count, len(coefficients))
+
+new_population = np.random.randint(low=-4.0, high=4.0, size=pop_size)
+min_fitness = 9999999
+
+num_generations = 10
+while min_fitness > 2:
+    fitness = fitness_func(coefficients, new_population, result)
+
+    parents = select_parents(new_population, fitness, parents_size)
+    childrens = crossover(parents, items_count - parents_size, len(coefficients))
+    childrens = mutation(childrens, len(coefficients))
+
+    new_population[0:parents.shape[0], ] = parents
+    new_population[parents.shape[0]:] = childrens
+    print(min_fitness)
+    min_fitness = np.min(fitness)
+
+fitness = fitness_func(coefficients, new_population, result)
+best_match_idx = np.where(fitness == np.min(fitness))
+
+print("Best solution : ", new_population[best_match_idx])
+print("Best solution fitness : ", fitness[best_match_idx][0])
+print("Result : ", np.sum(new_population[best_match_idx][0] * coefficients))
